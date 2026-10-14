@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quantum Noise Simulator</title>
+<style>
+:root{--bg:#0d0d0f;--card:#17171a;--card2:#1e1e22;--line:#2b2b31;--text:#e8e8ec;--mute:#8d8d98;
+--blue:#4a9eff;--green:#0b4f43;--green-b:#1f8a70;--red:#6b2414;--red-b:#c2502f;--amber:#e0a33a;--ok:#36c98f;--bad:#ff5d5d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;font-size:14px}
+header{padding:18px 24px 10px;border-bottom:1px solid var(--line)}
+h1{margin:0 0 4px;font-size:20px}
+.sub{color:var(--mute);font-size:12px}
+.stepper{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.step{padding:5px 10px;border-radius:14px;background:var(--card2);border:1px solid var(--line);font-size:11px;color:var(--mute);transition:.3s}
+.step.active{background:#17314f;border-color:var(--blue);color:#fff;box-shadow:0 0 10px #4a9eff55}
+.step.done{background:#0f3a2e;border-color:var(--green-b);color:#9ee6c9}
+main{max-width:1200px;margin:0 auto;padding:18px 24px 60px;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.card h2{margin:0 0 12px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.card h2 b{color:var(--blue);margin-right:6px}
+.row{display:flex;gap:16px;flex-wrap:wrap}.row>.card{flex:1 1 380px}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:12px}
+.stepbox{display:flex;align-items:center;gap:8px}
+.stepbox button{width:28px;height:28px}
+.stepbox span{min-width:24px;text-align:center;font-weight:700;font-size:16px}
+button,select,input{font:inherit;color:var(--text);background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:7px 11px}
+button{cursor:pointer}button:hover{border-color:var(--blue)}
+button.primary{background:var(--blue);color:#06101c;font-weight:700;border:none;padding:11px 20px;width:100%;font-size:15px}
+button.primary:disabled{opacity:.5;cursor:wait}
+.palette{display:flex;flex-wrap:wrap;gap:6px}
+.pg{min-width:44px;text-align:center;font-weight:700}
+.pg.active{background:#17314f;border-color:var(--blue);color:#fff}
+.pg.cnot{color:#7ed0ff}.pg.m{color:var(--amber)}
+.hint{color:var(--mute);font-size:12px;min-height:18px;margin-top:8px}
+.boardwrap{overflow-x:auto;padding-bottom:6px}
+#colhead,#board{display:grid;gap:0;width:max-content}
+#colhead div{height:22px;text-align:center;color:var(--mute);font-size:10px;line-height:22px}
+#board{grid-auto-rows:56px}
+.qlabel{display:flex;align-items:center;font-weight:700;color:#9fc8ff}
+.cell{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cell::before{content:"";position:absolute;left:0;right:0;top:50%;height:2px;background:#4b4b55}
+.cell:hover{background:#ffffff08}
+.cell.pending{outline:2px dashed var(--blue);outline-offset:-6px}
+.gate{position:relative;z-index:2;width:40px;height:40px;border-radius:8px;background:#1d3e66;border:1px solid var(--blue);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:15px;transition:.2s}
+.gate small{font-size:9px;font-weight:400;color:#bcd}
+.gate.m{background:#4a3510;border-color:var(--amber);color:#ffd88a}
+.dot{position:relative;z-index:2;width:14px;height:14px;border-radius:50%;background:#7ed0ff}
+.tgt{position:relative;z-index:2;width:30px;height:30px;border-radius:50%;border:2px solid #7ed0ff;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:20px;color:#7ed0ff;line-height:1}
+.vline{position:absolute;left:50%;width:2px;background:#7ed0ff;z-index:1;transform:translateX(-1px)}
+.show-noise .cell.hasnoise::after{content:"";position:absolute;right:5px;top:6px;width:11px;height:11px;border-radius:50%;background:var(--red-b);box-shadow:0 0 8px var(--red-b);z-index:3}
+.cell.flash .gate,.cell.flash .tgt{background:#7a2a14!important;border-color:var(--red-b)!important;box-shadow:0 0 14px var(--red-b)}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.checks li{display:flex;gap:8px;align-items:flex-start;font-size:13px}
+.checks .ic{font-weight:700;width:18px}.ok{color:var(--ok)}.bad{color:var(--bad)}.idle{color:var(--mute)}
+label.l{display:flex;justify-content:space-between;margin:12px 0 6px;color:var(--mute);font-size:12px}
+label.l .v{color:var(--blue);font-weight:700}
+.cfg select,.cfg input[type=number]{width:100%}
+input[type=range]{width:100%;padding:0;accent-color:var(--blue)}
+.result{display:none;animation:fade .5s}
+.result.show{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.outs{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;background:#111;border-radius:10px;padding:16px}
+.out{border-radius:8px;padding:34px 8px 12px;text-align:center;background:var(--green);border:1px solid var(--green-b);position:relative;overflow:hidden}
+.out.noisy{background:var(--red);border-color:var(--red-b)}
+.out .fill{position:absolute;left:0;right:0;bottom:0;background:#ffffff22;transition:height .8s}
+.out b{position:relative;display:block;font-size:15px}
+.out span{position:relative;font-size:12px;display:block;margin-top:4px}
+.out em{position:relative;font-style:normal;font-size:10px;color:#ffffffaa}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kv div{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:10px}
+.kv small{display:block;color:var(--mute);font-size:11px;margin-bottom:3px}
+.kv strong{font-size:15px}
+.arrow{text-align:center;color:var(--blue);margin-top:10px;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--mute);font-weight:600;font-size:11px;text-transform:uppercase}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px}
+.tile{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:14px}
+.tile small{color:var(--mute);font-size:11px}.tile div{font-size:26px;font-weight:800;margin-top:4px}
+.t-err div{color:var(--bad)}.t-suc div{color:var(--ok)}.t-fid div{color:var(--blue)}.t-evt div{color:var(--amber)}
+.charts{display:grid;gap:18px}
+.charts svg{width:100%;height:auto;background:#111;border-radius:10px}
+.insight{margin-top:10px;padding:10px 12px;border-left:3px solid var(--amber);background:#2a2110;border-radius:6px;font-size:13px}
+pre{background:#101012;border:1px solid var(--line);border-radius:8px;padding:12px;white-space:pre-wrap;font-size:12px;max-height:340px;overflow:auto}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header>
+  <h1>Quantum Noise Simulator</h1>
+  <div class="sub">Build circuit → Validate → Ideal simulation (Python) → Noise manager → Noise injection → Noisy simulation → Analysis → Report</div>
+  <div class="stepper" id="stepper"></div>
+</header>
+<main>
+
+<section class="card">
+  <h2><b>Module 1 + 2</b>Circuit Builder</h2>
+  <div class="toolbar">
+    <div class="stepbox">Qubits
+      <button id="qm">−</button><span id="qn">2</span><button id="qp">+</button>
+    </div>
+    <div class="stepbox">Steps <button id="cm">−</button><span id="cn">8</span><button id="cp">+</button></div>
+    <button id="measAll">Measure All</button>
+    <button id="clear">Clear</button>
+    <span style="color:var(--mute)">Presets:</span>
+    <button data-preset="project">Project circuit</button>
+    <button data-preset="bell">Bell state</button>
+    <button data-preset="x">X gate</button>
+  </div>
+  <div class="toolbar">
+    <div class="palette" id="palette"></div>
+    <div id="angleBox" style="display:none">Angle (°) <input id="angle" type="number" value="90" style="width:80px"></div>
+  </div>
+  <div class="boardwrap">
+    <div id="colhead"></div>
+    <div id="board"></div>
+  </div>
+  <div class="hint" id="hint">Pick a gate, then click a wire position to place it. Click a placed gate to remove it. For CNOT click the control cell, then the target cell in the same step.</div>
+</section>
+
+<div class="row">
+  <section class="card">
+    <h2><b>Module 3</b>Circuit Validation</h2>
+    <ul class="checks" id="checks"></ul>
+  </section>
+  <section class="card cfg">
+    <h2>Noise Configuration</h2>
+    <label class="l">Noise Type</label>
+    <select id="ntype">
+      <option>Bit Flip</option><option>Phase Flip</option><option>Depolarizing</option>
+      <option>Amplitude Damping</option><option>Phase Damping</option><option>Readout Error</option>
+    </select>
+    <label class="l"><span id="plabel">Noise Strength</span><span class="v" id="pval">10%</span></label>
+    <input type="range" id="nstr" min="0" max="100" value="10">
+    <label class="l">Shots</label>
+    <input type="number" id="shots" value="1000" min="10" max="20000">
+    <label class="l">Random seed</label>
+    <input type="number" id="seed" value="42">
+    <div style="margin-top:16px"><button class="primary" id="run">▶ Start Simulation</button></div>
+  </section>
+</div>
+
+<section class="card result" id="r-ideal">
+  <h2><b>Module 4</b>Ideal Simulator &amp; Results (no noise)</h2>
+  <div class="hint" id="idealInfo" style="margin:0 0 10px"></div>
+  <div class="outs" id="idealOuts"></div>
+</section>
+
+<section class="card result" id="r-manager">
+  <h2><b>Module 5</b>Noise Manager</h2>
+  <div class="kv" id="mgrKv"></div>
+  <div class="arrow">▼ configuration sent to Noise Injection ▼</div>
+</section>
+
+<section class="card result" id="r-inject">
+  <h2><b>Module 6</b>Noise Injection</h2>
+  <div class="hint" id="injInfo" style="margin:0 0 10px"></div>
+  <table id="injTable"></table>
+</section>
+
+<section class="card result" id="r-noisy">
+  <h2><b>Module 7</b>Noisy Simulator &amp; Results</h2>
+  <div class="hint" id="noisyInfo" style="margin:0 0 10px"></div>
+  <div class="outs" id="noisyOuts"></div>
+</section>
+
+<section class="card result" id="r-analysis">
+  <h2><b>Result Analyzer</b>Ideal vs Noisy</h2>
+  <div class="tiles" id="tiles"></div>
+  <table id="cmpTable"></table>
+  <div class="insight" id="insight" style="display:none"></div>
+</section>
+
+<section class="card result" id="r-viz">
+  <h2><b>Visualization</b>Histogram · Noise impact · Error comparison</h2>
+  <div class="charts" id="charts"></div>
+</section>
+
+<section class="card result" id="r-report">
+  <h2><b>Final Report</b></h2>
+  <pre id="reportText"></pre>
+  <div class="btns"><button id="dl">⬇ Download report (.txt)</button></div>
+</section>
+
+</main>
+
+<script>
+/* ====================== BACKEND ADDRESS ======================
+   Local run (python app.py):  leave as ''
+   Deployed (Vercel + Render): put your Render URL, e.g. 'https://quantum-noise-api.onrender.com' (no trailing slash) */
+const API_BASE='https://quantum-noise-simulator.onrender.com';
+
+/* ====================== STATE ====================== */
+const $=s=>document.querySelector(s);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const GATES=['H','X','Y','Z','S','T','RX','RY','RZ','CNOT','M'];
+const ROT=['RX','RY','RZ'];
+const NOISE_TYPES=['Bit Flip','Phase Flip','Depolarizing','Amplitude Damping','Phase Damping','Readout Error'];
+const PARAM_NAME={'Bit Flip':'p (flip probability)','Phase Flip':'p (phase-flip probability)','Depolarizing':'p (depolarizing probability)',
+ 'Amplitude Damping':'γ (damping probability)','Phase Damping':'λ (dephasing strength)','Readout Error':'p (readout flip probability)'};
+const WHERE={'Bit Flip':'after every gate, on each qubit it touches','Phase Flip':'after every gate, on each qubit it touches',
+ 'Depolarizing':'after every gate, on each qubit it touches','Amplitude Damping':'after every gate, on each qubit it touches',
+ 'Phase Damping':'after every gate, on each qubit it touches','Readout Error':'at measurement (classical readout bit flip)'};
+const S={n:2,cols:8,init:[],ops:[],sel:'H',pending:null,nextId:1,running:false,report:''};
+const STAGES=['Circuit Builder','Validation','Ideal Simulator','Noise Manager','Noise Injection','Noisy Simulator','Result Analyzer','Visualization','Final Report'];
+
+/* ====================== STEPPER ====================== */
+function initStepper(){ $('#stepper').innerHTML=STAGES.map((s,i)=>`<div class="step" id="st${i}">${i+1}. ${s}</div>`).join(''); }
+function setStage(k){ STAGES.forEach((_,i)=>{const e=$('#st'+i);e.className='step'+(i<k?' done':i===k?' active':'');}); }
+
+/* ====================== BUILDER UI ====================== */
+function hint(t){$('#hint').textContent=t;}
+function ownerOp(q,c){return S.ops.find(o=>o.col===c&&o.qubits.includes(q));}
+function crossing(q,c){return S.ops.find(o=>o.col===c&&o.gate==='CNOT'&&q>Math.min(...o.qubits)&&q<Math.max(...o.qubits));}
+function add(gate,qubits,col,param){S.ops.push({id:S.nextId++,gate,qubits,col,param});}
+
+function buildPalette(){
+  $('#palette').innerHTML=GATES.map(g=>`<button class="pg ${g==='CNOT'?'cnot':g==='M'?'m':''} ${S.sel===g?'active':''}" data-g="${g}">${g==='M'?'M (measure)':g}</button>`).join('');
+  document.querySelectorAll('.pg').forEach(b=>b.onclick=()=>{S.sel=b.dataset.g;S.pending=null;buildPalette();renderBoard();
+    $('#angleBox').style.display=ROT.includes(S.sel)?'block':'none';
+    hint(S.sel==='CNOT'?'CNOT: click the control cell, then the target cell in the same step.':`Selected ${S.sel}. Click a wire position to place it.`);});
+}
+function renderBoard(){
+  const tpl=`56px repeat(${S.cols},56px)`;
+  $('#colhead').style.gridTemplateColumns=tpl;$('#board').style.gridTemplateColumns=tpl;
+  $('#colhead').innerHTML='<div></div>'+Array.from({length:S.cols},(_,i)=>`<div>step ${i+1}</div>`).join('');
+  const b=$('#board');b.innerHTML='';
+  for(let q=0;q<S.n;q++){
+    const lab=document.createElement('div');lab.className='qlabel';lab.style.cursor='pointer';lab.title='Click to switch the starting state between |0⟩ and |1⟩';
+    lab.textContent='q'+q+'  |'+(S.init[q]?1:0)+'⟩';
+    lab.onclick=()=>{S.init[q]=S.init[q]?0:1;renderBoard();resetChecks();hint('q'+q+' now starts in |'+S.init[q]+'⟩.');};
+    b.append(lab);
+    for(let c=0;c<S.cols;c++){
+      const cell=document.createElement('div');cell.className='cell';cell.dataset.q=q;cell.dataset.c=c;
+      const op=ownerOp(q,c);
+      if(op){
+        cell.classList.add('hasnoise');
+        if(op.gate==='M'){cell.classList.remove('hasnoise');cell.innerHTML='<div class="gate m">M</div>';}
+        else if(op.gate==='CNOT'){
+          const [ct,tg]=op.qubits;
+          if(q===ct){
+            const span=Math.abs(tg-ct)*56;
+            cell.innerHTML='<div class="dot"></div>'+`<div class="vline" style="${tg>ct?'top':'bottom'}:50%;height:${span}px"></div>`;
+          } else cell.innerHTML='<div class="tgt">⊕</div>';
+        } else cell.innerHTML=`<div class="gate">${op.gate}${ROT.includes(op.gate)?`<small>${op.param}°</small>`:''}</div>`;
+      } else if(crossing(q,c)){const v=document.createElement('div');v.className='vline';v.style.top='0';v.style.height='100%';cell.append(v);}
+      if(S.pending&&S.pending.q===q&&S.pending.c===c)cell.classList.add('pending');
+      cell.onclick=()=>onCell(q,c);
+      b.append(cell);
+    }
+  }
+  $('#qn').textContent=S.n;$('#cn').textContent=S.cols;
+}
+function onCell(q,c){
+  const own=ownerOp(q,c);
+  if(own){S.ops=S.ops.filter(o=>o.id!==own.id);S.pending=null;hint(`Removed ${own.gate}.`);renderBoard();resetChecks();return;}
+  if(crossing(q,c)){hint('That wire position is crossed by a CNOT line. Choose another step.');return;}
+  const g=S.sel;
+  if(g==='CNOT'){
+    if(S.n<2){hint('CNOT needs at least 2 qubits.');return;}
+    if(!S.pending){S.pending={q,c};hint('Control set. Now click the target cell in the same step (different wire).');renderBoard();return;}
+    if(S.pending.c!==c){S.pending={q,c};hint('Target must be in the same step as the control. Control moved here; click the target.');renderBoard();return;}
+    if(S.pending.q===q){S.pending=null;hint('Control and target cannot be the same qubit.');renderBoard();return;}
+    const lo=Math.min(q,S.pending.q),hi=Math.max(q,S.pending.q);
+    for(let k=lo+1;k<hi;k++)if(ownerOp(k,c)){hint('A gate sits between control and target in this step.');return;}
+    add('CNOT',[S.pending.q,q],c);S.pending=null;hint('CNOT added.');
+  } else {
+    const p=ROT.includes(g)?parseFloat($('#angle').value):undefined;
+    add(g,[q],c,p);hint(`${g} added on q${q}, step ${c+1}.`);
+  }
+  renderBoard();resetChecks();
+}
+function setQubits(n){
+  S.n=Math.max(1,Math.min(5,n));S.ops=S.ops.filter(o=>o.qubits.every(x=>x<S.n));S.pending=null;renderBoard();resetChecks();
+}
+function measureAll(){
+  const measured=new Set(S.ops.filter(o=>o.gate==='M').map(o=>o.qubits[0]));
+  const mc=S.ops.length?Math.max(...S.ops.map(o=>o.col))+1:0;
+  if(mc>=S.cols&&mc<20)S.cols=mc+1;
+  for(let q=0;q<S.n;q++)if(!measured.has(q)&&!ownerOp(q,mc)&&!crossing(q,mc))add('M',[q],mc);
+  renderBoard();resetChecks();hint('Measurement added to all qubits.');
+}
+function preset(name){
+  S.ops=[];S.pending=null;S.nextId=1;
+  if(name==='project'){S.n=2;S.cols=Math.max(S.cols,4);add('H',[0],0);add('X',[1],0);add('X',[0],1);add('H',[1],1);add('M',[0],2);add('M',[1],2);}
+  if(name==='bell'){S.n=2;S.cols=Math.max(S.cols,4);add('H',[0],0);add('CNOT',[0,1],1);add('M',[0],2);add('M',[1],2);}
+  if(name==='x'){S.n=1;S.cols=Math.max(S.cols,3);add('X',[0],0);add('M',[0],1);}
+  renderBoard();resetChecks();
+}
+
+/* ====================== VALIDATION (Module 3) ====================== */
+function validate(){
+  const ops=S.ops,res=[];
+  res.push({ok:ops.some(o=>o.gate!=='M'),label:'Circuit is not empty',detail:'Add at least one gate.'});
+  const badQ=ops.filter(o=>o.qubits.some(q=>!Number.isInteger(q)||q<0||q>=S.n));
+  res.push({ok:!badQ.length,label:'All qubit indices are valid',detail:'A gate uses a qubit outside 0..'+(S.n-1)});
+  const badP=ops.filter(o=>ROT.includes(o.gate)&&!Number.isFinite(o.param));
+  res.push({ok:!badP.length,label:'Gate parameters are valid',detail:'Rotation gate needs a numeric angle.'});
+  let conn=true,why='';
+  ops.forEach(o=>{if(o.gate==='CNOT'&&o.qubits[0]===o.qubits[1]){conn=false;why='CNOT control equals target.';}});
+  const seen={};ops.forEach(o=>o.qubits.forEach(q=>{const k=q+'-'+o.col;if(seen[k]){conn=false;why='Two gates share a wire in the same step.';}seen[k]=1;}));
+  S.ops.filter(o=>o.gate==='M').forEach(m=>{if(ops.some(o=>o.gate!=='M'&&o.qubits.includes(m.qubits[0])&&o.col>m.col)){conn=false;why='A gate is placed after a measurement on q'+m.qubits[0]+'.';}});
+  res.push({ok:conn,label:'Gate connections are correct',detail:why});
+  const ms=ops.filter(o=>o.gate==='M').map(o=>o.qubits[0]);
+  res.push({ok:ms.length>0&&new Set(ms).size===ms.length,label:'Measurement is present',detail:ms.length?'A qubit is measured twice.':'Add measurement (use Measure All).'});
+  const ok=res.every(r=>r.ok);
+  res.push({ok,label:ok?'VALID circuit - ready to simulate':'INVALID circuit - fix the issues above',detail:'',final:true});
+  return {ok,res};
+}
+function renderChecks(v){
+  $('#checks').innerHTML=v.res.map(r=>`<li><span class="ic ${r.ok?'ok':'bad'}">${r.ok?'✓':'✗'}</span><span class="${r.final?(r.ok?'ok':'bad'):''}"><b>${r.label}</b>${!r.ok&&r.detail?`<br><span style="color:var(--mute)">${r.detail}</span>`:''}</span></li>`).join('');
+}
+function resetChecks(){
+  $('#checks').innerHTML=['Circuit is not empty','All qubit indices are valid','Gate parameters are valid','Gate connections are correct','Measurement is present'].map(t=>`<li><span class="ic idle">○</span><span>${t}</span></li>`).join('');
+}
+
+/* Simulation runs in Python (see simulator.py / app.py). The page only draws the results. */
+const sk=o=>Object.keys(o).sort();
+
+/* ====================== RENDER HELPERS ====================== */
+const pct=x=>(x*100).toFixed(1).replace(/\.0$/,'')+'%';
+function show(id){$(id).classList.add('show');$(id).scrollIntoView({behavior:'smooth',block:'nearest'});}
+function renderOuts(el,probs,counts,noisy){
+  $(el).innerHTML=sk(probs).map(k=>`<div class="out ${noisy?'noisy':''}"><div class="fill" style="height:0" data-h="${probs[k]*100}"></div><b>${k}</b><span>${pct(probs[k])}</span><em>${counts[k]} shots</em></div>`).join('');
+  setTimeout(()=>document.querySelectorAll(el+' .fill').forEach(f=>f.style.height=f.dataset.h+'%'),50);
+}
+function histSVG(keys,pi,pn){
+  const W=Math.max(640,keys.length*80),H=300,L=44,B=40,T=24,pw=W-L-12,ph=H-B-T,g=pw/keys.length;
+  let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" font-size="11">`;
+  for(let i=0;i<=4;i++){const y=T+ph-ph*i/4;s+=`<line x1="${L}" x2="${W-8}" y1="${y}" y2="${y}" stroke="#2b2b31"/><text x="${L-6}" y="${y+4}" fill="#8d8d98" text-anchor="end">${i*25}%</text>`;}
+  keys.forEach((k,i)=>{const x=L+i*g+g*0.15,bw=g*0.34;
+    const h1=ph*pi[k],h2=ph*pn[k];
+    s+=`<rect x="${x}" y="${T+ph-h1}" width="${bw}" height="${h1}" fill="#1f8a70"/><text x="${x+bw/2}" y="${T+ph-h1-4}" fill="#9ee6c9" text-anchor="middle" font-size="10">${pct(pi[k])}</text>`;
+    s+=`<rect x="${x+bw+2}" y="${T+ph-h2}" width="${bw}" height="${h2}" fill="#c2502f"/><text x="${x+bw+2+bw/2}" y="${T+ph-h2-4}" fill="#ffb59f" text-anchor="middle" font-size="10">${pct(pn[k])}</text>`;
+    s+=`<text x="${L+i*g+g/2}" y="${H-18}" fill="#e8e8ec" text-anchor="middle" font-size="12">${k}</text>`;});
+  s+=`<rect x="${W-190}" y="4" width="10" height="10" fill="#1f8a70"/><text x="${W-175}" y="13" fill="#e8e8ec">Ideal</text><rect x="${W-120}" y="4" width="10" height="10" fill="#c2502f"/><text x="${W-105}" y="13" fill="#e8e8ec">Noisy</text></svg>`;
+  return s;
+}
+function lineSVG(xs,series,title){
+  const W=640,H=300,L=44,B=40,T=30,pw=W-L-14,ph=H-B-T;
+  let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" font-size="11"><text x="${L}" y="16" fill="#e8e8ec" font-size="12">${title}</text>`;
+  for(let i=0;i<=4;i++){const y=T+ph-ph*i/4;s+=`<line x1="${L}" x2="${W-8}" y1="${y}" y2="${y}" stroke="#2b2b31"/><text x="${L-6}" y="${y+4}" fill="#8d8d98" text-anchor="end">${i*25}%</text>`;}
+  xs.forEach((x,i)=>{if(i%2===0)s+=`<text x="${L+pw*x}" y="${H-22}" fill="#8d8d98" text-anchor="middle">${Math.round(x*100)}%</text>`;});
+  s+=`<text x="${L+pw/2}" y="${H-6}" fill="#8d8d98" text-anchor="middle">Noise strength</text>`;
+  series.forEach((se,si)=>{
+    const pts=xs.map((x,i)=>`${L+pw*x},${T+ph-ph*Math.max(0,Math.min(1,se.ys[i]))}`).join(' ');
+    s+=`<polyline points="${pts}" fill="none" stroke="${se.color}" stroke-width="2.5"/>`;
+    xs.forEach((x,i)=>s+=`<circle cx="${L+pw*x}" cy="${T+ph-ph*Math.max(0,Math.min(1,se.ys[i]))}" r="3" fill="${se.color}"/>`);
+    s+=`<rect x="${W-190+si*95}" y="6" width="10" height="10" fill="${se.color}"/><text x="${W-175+si*95}" y="15" fill="#e8e8ec">${se.name}</text>`;
+  });
+  return s+'</svg>';
+}
+function barSVG(items,cur){
+  const W=640,rowH=36,H=items.length*rowH+40,L=150;
+  let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif" font-size="12"><text x="10" y="18" fill="#e8e8ec">Error rate by noise type (same strength &amp; shots)</text>`;
+  const mx=Math.max(0.01,...items.map(i=>i.v));
+  items.forEach((it,i)=>{const y=34+i*rowH,w=(W-L-70)*it.v/mx;
+    s+=`<text x="${L-8}" y="${y+16}" fill="${it.n===cur?'#4a9eff':'#e8e8ec'}" text-anchor="end">${it.n}</text><rect x="${L}" y="${y+2}" width="${Math.max(2,w)}" height="22" rx="4" fill="${it.n===cur?'#4a9eff':'#c2502f'}"/><text x="${L+Math.max(2,w)+8}" y="${y+18}" fill="#e8e8ec">${pct(it.v)}</text>`;});
+  return s+'</svg>';
+}
+function opName(o){return o.gate==='CNOT'?`CNOT(c=q${o.qubits[0]}, t=q${o.qubits[1]})`:`${o.gate}${ROT.includes(o.gate)?'('+o.param+'°)':''}(q${o.qubits[0]})`;}
+
+/* ====================== RUN PIPELINE ====================== */
+function resetResults(){
+  document.querySelectorAll('.result').forEach(r=>r.classList.remove('show'));
+  $('#board').classList.remove('show-noise');
+}
+async function flashGates(C){
+  for(const o of C.ops){
+    const cells=o.qubits.map(q=>document.querySelector(`.cell[data-q="${q}"][data-c="${o.col}"]`));
+    cells.forEach(c=>c&&c.classList.add('flash'));await sleep(260);cells.forEach(c=>c&&c.classList.remove('flash'));
+  }
+}
+async function run(){
+  if(S.running)return;S.running=true;$('#run').disabled=true;resetResults();
+  try{
+    const type=$('#ntype').value,p=$('#nstr').value/100,shots=Math.max(10,Math.min(20000,parseInt($('#shots').value)||1000)),seed=parseInt($('#seed').value)||42;
+    setStage(1);hint('Sending circuit to the Python simulator...');
+    const payload={n_qubits:S.n,init:Array.from({length:S.n},(_,i)=>S.init[i]?1:0),ops:S.ops.map(o=>({id:o.id,gate:o.gate,qubits:o.qubits,col:o.col,param:Number.isFinite(o.param)?o.param:null})),noise:{type,strength:p},shots,seed};
+    let D;
+    try{
+      const r=await fetch(API_BASE+'/api/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      D=await r.json();
+    }catch(e){setStage(0);hint('Cannot reach the Python server. Start it with:  python app.py  and open http://127.0.0.1:5000');return;}
+    renderChecks({res:D.checks});$('#checks').scrollIntoView({behavior:'smooth',block:'nearest'});
+    if(!D.ok){setStage(0);hint(D.error?('Python error: '+D.error):'Circuit is invalid - fix it and press Start Simulation again.');return;}
+    hint('Python simulation finished.');
+    await sleep(500);
+
+    const ideal=D.ideal,noisy=D.noisy,A=D.analysis,M=D.manager,keys=sk(ideal.probs),pn=noisy.probs,events=noisy.log.events;
+
+    setStage(2);await sleep(300);
+    $('#idealInfo').textContent=`${shots} shots · measured qubits: ${ideal.measured.map(q=>'q'+q).join(', ')} · outcome label reads q${ideal.measured[0]} on the left. Percent = exact probability, "shots" = sampled count.`;
+    renderOuts('#idealOuts',ideal.probs,ideal.counts,false);show('#r-ideal');await sleep(1100);
+
+    setStage(3);
+    $('#mgrKv').innerHTML=[['Noise type',M.type],['Parameter',M.param_name],['Strength',pct(M.strength)],['Applied',M.where],['Shots',M.shots],['Random seed',M.seed]]
+      .map(([a,b])=>`<div><small>${a}</small><strong>${b}</strong></div>`).join('');
+    show('#r-manager');await sleep(1100);
+
+    setStage(4);
+    const readout=D.injection.readout,rows=D.injection.rows;
+    $('#injInfo').textContent=readout?`Readout error: each measured bit is flipped with probability ${pct(p)} when it is read out. Red dots on the circuit above mark where noise is injected.`
+      :`${type} (${pct(p)}) is inserted after every gate on every qubit that gate touches. Red dots on the circuit above mark each injection point.`;
+    $('#injTable').innerHTML='<tr><th>Step</th><th>Gate</th><th>Noise injected</th><th>Error events (all shots)</th></tr>'+rows.map(r=>{
+      const n=readout?noisy.log.per_qubit[r.qubit]:noisy.log.per_gate[r.id];
+      return `<tr><td>${r.step}</td><td>${r.name}</td><td>${r.where} @ ${pct(p)}</td><td>${n}</td></tr>`;}).join('');
+    $('#board').classList.add('show-noise');
+    if(readout)S.ops.filter(o=>o.gate==='M').forEach(m=>document.querySelector(`.cell[data-q="${m.qubits[0]}"][data-c="${m.col}"]`).classList.add('hasnoise'));
+    show('#r-inject');await flashGates({ops:S.ops.filter(o=>o.gate!=='M').sort((a,b)=>a.col-b.col||a.id-b.id)});
+
+    setStage(5);await sleep(300);
+    $('#noisyInfo').textContent=`${shots} noisy shots · ${events} error events injected in total (${(events/shots).toFixed(3)} per shot) · per qubit: ${noisy.log.per_qubit.map((c,i)=>'q'+i+'='+c).join(', ')}`;
+    renderOuts('#noisyOuts',pn,noisy.counts,true);show('#r-noisy');await sleep(1100);
+
+    setStage(6);
+    $('#tiles').innerHTML=`<div class="tile t-err"><small>ERROR RATE</small><div>${pct(A.error)}</div></div><div class="tile t-suc"><small>SUCCESS RATE</small><div>${pct(A.success)}</div></div><div class="tile t-fid"><small>FIDELITY</small><div>${A.fidelity.toFixed(3)}</div></div><div class="tile t-evt"><small>NOISE EVENTS</small><div>${events}</div></div>`;
+    $('#cmpTable').innerHTML='<tr><th>Outcome</th><th>Ideal</th><th>Noisy</th><th>Change</th></tr>'+keys.map(k=>{const d=pn[k]-ideal.probs[k];return`<tr><td><b>${k}</b></td><td>${pct(ideal.probs[k])}</td><td>${pct(pn[k])}</td><td style="color:${d>0.0005?'#ffb59f':d<-0.0005?'#9ee6c9':'#8d8d98'}">${d>=0?'+':''}${(d*100).toFixed(1)}%</td></tr>`;}).join('');
+    const ins=$('#insight');
+    if(A.error<0.03&&p>=0.05){ins.style.display='block';ins.textContent='Noise had almost no visible effect on this circuit\'s measured outcomes. This happens when the state before measurement is not sensitive to the chosen noise (for example bit flip on |+⟩ or |−⟩ states). Try Amplitude Damping, or a circuit with an X gate.';}
+    else ins.style.display='none';
+    show('#r-analysis');await sleep(600);
+
+    setStage(7);await sleep(50);
+    $('#charts').innerHTML=histSVG(keys,ideal.probs,pn)+lineSVG(D.sweep.xs,[{name:'Fidelity',color:'#4a9eff',ys:D.sweep.fidelity},{name:'Error rate',color:'#ff7b5c',ys:D.sweep.error}],`Noise impact: ${type} (fidelity & error vs strength)`)+barSVG(D.compare,type);
+    show('#r-viz');await sleep(600);
+
+    setStage(8);
+    S.report=D.report;$('#reportText').textContent=S.report;show('#r-report');
+    setStage(9);
+  }catch(e){console.error(e);hint('Error: '+e.message);}
+  finally{S.running=false;$('#run').disabled=false;}
+}
+
+/* ====================== INIT ====================== */
+$('#qm').onclick=()=>setQubits(S.n-1);$('#qp').onclick=()=>setQubits(S.n+1);
+$('#cm').onclick=()=>{if(S.cols>3&&!S.ops.some(o=>o.col>=S.cols-1)){S.cols--;renderBoard();}else hint('Remove gates in the last step first.');};
+$('#cp').onclick=()=>{if(S.cols<20){S.cols++;renderBoard();}};
+$('#measAll').onclick=measureAll;
+$('#clear').onclick=()=>{S.ops=[];S.pending=null;renderBoard();resetChecks();resetResults();setStage(0);};
+document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>preset(b.dataset.preset));
+$('#nstr').oninput=()=>{$('#pval').textContent=$('#nstr').value+'%';};
+$('#ntype').onchange=()=>{$('#plabel').textContent=PARAM_NAME[$('#ntype').value].split(' ')[0]==='γ'?'Damping γ':'Noise Strength';};
+$('#run').onclick=run;
+$('#dl').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([S.report],{type:'text/plain'}));a.download='quantum_noise_report.txt';a.click();};
+initStepper();buildPalette();resetChecks();preset('project');setStage(0);
+</script>
+</body>
+</html>
